@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LearningChart, RadarChart, ScatterChart } from '../components/charts';
 import {
   APP_NAME,
@@ -28,7 +28,7 @@ function fmtSec(v: number | null): string {
  * 支援者の観察と合わせて判断する前提を明記する。
  */
 export function ReportScreen() {
-  const { doc, navigate, currentUserId, updateUser } = useApp();
+  const { doc, navigate, currentUserId, updateUser, setNavGuard } = useApp();
   const user = doc.users.find((u) => u.id === currentUserId);
   const sessions = useMemo(
     () =>
@@ -46,6 +46,13 @@ export function ReportScreen() {
 
   const [note, setNote] = useState(user?.reportNote ?? '');
   const [noteSaved, setNoteSaved] = useState(false);
+
+  // 所見メモが未保存のまま画面を離れようとしたら確認する
+  const noteDirty = note !== (user?.reportNote ?? '');
+  useEffect(() => {
+    setNavGuard(noteDirty ? { message: '所見メモが保存されていません。保存せずに移動しますか？' } : null);
+    return () => setNavGuard(null);
+  }, [noteDirty, setNavGuard]);
 
   const selfEvalRows = useMemo(() => {
     const rows: { date: string; label: string; accuracy: number | null; difficulty?: number; performance?: number }[] = [];

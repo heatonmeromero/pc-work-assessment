@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ERROR_LABELS, SELFEVAL_DIFFICULTY, SELFEVAL_PERFORMANCE, STATUS_LABELS, TASK_NAMES } from '../constants';
 import { LevelChart, TimelineChart } from '../components/charts';
 import { useApp } from '../store/AppContext';
@@ -26,10 +26,17 @@ function halves(trials: TrialLog[]) {
 }
 
 export function ResultScreen({ sessionId, backTo }: { sessionId: string; backTo?: Screen }) {
-  const { doc, navigate, updateSession } = useApp();
+  const { doc, navigate, updateSession, setNavGuard } = useApp();
   const session = doc.sessions.find((s) => s.id === sessionId);
   const [note, setNote] = useState(session?.note ?? '');
   const [noteSaved, setNoteSaved] = useState(false);
+
+  // 所見メモが未保存のまま画面を離れようとしたら確認する
+  const noteDirty = note !== (session?.note ?? '');
+  useEffect(() => {
+    setNavGuard(noteDirty ? { message: '所見メモが保存されていません。保存せずに移動しますか？' } : null);
+    return () => setNavGuard(null);
+  }, [noteDirty, setNavGuard]);
 
   const errorCounts = useMemo(() => {
     if (!session) return [];

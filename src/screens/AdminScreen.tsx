@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { TASK_NAMES, TASK_ORDER } from '../constants';
 import { useApp } from '../store/AppContext';
 import { dateStamp, downloadCSV, downloadJSON, fmtDateTime, trialsToCSV } from '../store/exporter';
+import { storageUsageBytes, STORAGE_LIMIT_BYTES } from '../store/storage';
 import { TASKS } from '../tasks/registry';
 
 /** 数値入力の検証：空欄や数値でない入力は無視して現在値を維持し、範囲外はクランプする */
@@ -12,11 +13,201 @@ function numOr(value: string, min: number, max: number, fallback: number): numbe
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
+const PIN_PATTERN = /^\d{4,8}$/;
+
+/**
+ * 管理画面の合言葉（PIN）ゲート。
+ * 目的は誤操作・いたずら防止であり、セキュリティ機能ではない
+ * （PINは平文で保存され、詳しい人ならブラウザの開発ツールで読める）。
+ */
+function AdminGate({
+  pin,
+  onSetPin,
+  onUnlock,
+  onResetPin,
+  onBack,
+}: {
+  pin: string | undefined;
+  onSetPin: (pin: string) => void;
+  onUnlock: () => void;
+  onResetPin: () => void;
+  onBack: () => void;
+}) {
+  const [input, setInput] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [resetText, setResetText] = useState('');
+  const [mode, setMode] = useState<'enter' | 'reset'>('enter');
+  const [error, setError] = useState<string | null>(null);
+
+  // --- 初回：PINの設定 ---
+  if (!pin) {
+    const trySet = () => {
+      if (!PIN_PATTERN.test(input)) {
+        setError('PINは4〜8桁の数字で設定してください');
+        return;
+      }
+      if (input !== confirm) {
+        setError('確認用のPINが一致しません');
+        return;
+      }
+      onSetPin(input);
+    };
+    return (
+      <div className="screen">
+        <section className="panel gate-panel">
+          <h2>管理画面のPIN（合言葉）を設定してください</h2>
+          <p className="sub">
+            はじめて管理画面を使うため、支援員共通のPINを決めます。設定後は、管理画面に入るときにこのPINが必要になります。
+            <br />
+            ※ 誤操作・いたずら防止のための仕組みです。PINを忘れてもデータは消えません。
+          </p>
+          <div className="form-group">
+            <label className="input-row">
+              <span>PIN（4〜8桁の数字）</span>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={8}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+              />
+            </label>
+            <label className="input-row">
+              <span>もう一度入力</span>
+              <input
+                type="password"
+                inputMode="numeric"
+                maxLength={8}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) trySet();
+                }}
+              />
+            </label>
+          </div>
+          {error && <div className="form-error" role="alert">{error}</div>}
+          <div className="panel-actions">
+            <button type="button" className="btn btn-ghost" onClick={onBack}>
+              もどる
+            </button>
+            <button type="button" className="btn btn-primary btn-lg" onClick={trySet}>
+              このPINで設定する
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // --- PINリセット ---
+  if (mode === 'reset') {
+    const tryReset = () => {
+      if (resetText.trim() !== 'リセット') {
+        setError('「リセット」と入力してください');
+        return;
+      }
+      onResetPin();
+      setMode('enter');
+      setInput('');
+      setConfirm('');
+      setResetText('');
+      setError(null);
+    };
+    return (
+      <div className="screen">
+        <section className="panel gate-panel">
+          <h2>PINの初期化</h2>
+          <p className="sub">
+            PINだけを初期化します。<strong>記録データは消えません。</strong>
+            初期化すると、次に管理画面を開くときに新しいPINを設定します。
+          </p>
+          <label className="input-row">
+            <span>確認のため「リセット」と入力</span>
+            <input type="text" value={resetText} onChange={(e) => setResetText(e.target.value)} />
+          </label>
+          {error && <div className="form-error" role="alert">{error}</div>}
+          <div className="panel-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => { setMode('enter'); setError(null); }}>
+              やめる
+            </button>
+            <button type="button" className="btn btn-danger" onClick={tryReset}>
+              PINを初期化する
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // --- 通常：PIN入力 ---
+  const tryUnlock = () => {
+    if (input === pin) {
+      onUnlock();
+    } else {
+      setError('PINがちがいます');
+      setInput('');
+    }
+  };
+  return (
+    <div className="screen">
+      <section className="panel gate-panel">
+        <h2>管理画面（支援者用）</h2>
+        <p className="sub">支援員共通のPINを入力してください。</p>
+        <label className="input-row">
+          <span>PIN</span>
+          <input
+            type="password"
+            inputMode="numeric"
+            maxLength={8}
+            autoFocus
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) tryUnlock();
+            }}
+          />
+        </label>
+        {error && <div className="form-error" role="alert">{error}</div>}
+        <div className="panel-actions">
+          <button type="button" className="btn btn-ghost" onClick={onBack}>
+            もどる
+          </button>
+          <button type="button" className="btn btn-primary btn-lg" onClick={tryUnlock}>
+            入る
+          </button>
+        </div>
+        <p className="sub gate-reset-link">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setMode('reset'); setError(null); }}>
+            PINを忘れた場合（データは消えません）
+          </button>
+        </p>
+      </section>
+    </div>
+  );
+}
+
 export function AdminScreen() {
-  const { doc, navigate, deleteUser, updateDefaults, importData, clearAll } = useApp();
+  const { doc, navigate, deleteUser, updateDefaults, updateSettings, importData, clearAll } = useApp();
   const defs = doc.settings.defaults;
+  const [unlocked, setUnlocked] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  if (!unlocked) {
+    return (
+      <AdminGate
+        pin={doc.settings.adminPin}
+        onSetPin={(p) => {
+          updateSettings({ adminPin: p });
+          setUnlocked(true);
+        }}
+        onUnlock={() => setUnlocked(true)}
+        onResetPin={() => updateSettings({ adminPin: undefined })}
+        onBack={() => navigate({ name: 'top' })}
+      />
+    );
+  }
 
   const onDeleteUser = (id: string) => {
     const count = doc.sessions.filter((s) => s.userId === id).length;
@@ -40,10 +231,18 @@ export function AdminScreen() {
 
   const onClearAll = () => {
     if (!window.confirm('すべての利用者・セッションデータを削除します。よろしいですか？')) return;
-    if (!window.confirm('この操作はもとに戻せません。先にJSONエクスポートでバックアップを取ることをおすすめします。本当に削除しますか？')) return;
+    const pinInput = window.prompt('確認のため、管理画面のPINを入力してください');
+    if (pinInput === null) return;
+    if (pinInput !== doc.settings.adminPin) {
+      setMessage('PINが一致しないため、削除を中止しました');
+      return;
+    }
     clearAll();
     setMessage('すべてのデータを削除しました');
   };
+
+  const usage = storageUsageBytes();
+  const usagePct = Math.min(100, Math.round((usage / STORAGE_LIMIT_BYTES) * 100));
 
   return (
     <div className="screen">
@@ -164,6 +363,23 @@ export function AdminScreen() {
         <p className="sub">
           データはこのPCのこのブラウザ内にのみ保存されます。バックアップやPC間の移動にはJSONエクスポート／インポートを使ってください。
         </p>
+        <div className="capacity-row">
+          <span className="sub">保存容量のめやす：</span>
+          <span className="capacity-track" aria-hidden="true">
+            <span
+              className={'capacity-fill' + (usagePct >= 70 ? ' capacity-warn' : '')}
+              style={{ width: `${Math.max(2, usagePct)}%` }}
+            />
+          </span>
+          <span className="sub capacity-label">
+            {(usage / 1024).toFixed(0)} KB / 約{Math.round(STORAGE_LIMIT_BYTES / 1024 / 1024)}MB（{usagePct}%）
+          </span>
+        </div>
+        {usagePct >= 70 && (
+          <p className="form-error">
+            容量が残り少なくなっています。JSONエクスポートでバックアップした上で、古い利用者の記録を削除してください。
+          </p>
+        )}
         <div className="panel-actions wrap">
           <button
             type="button"

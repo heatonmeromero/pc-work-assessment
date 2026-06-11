@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SELFEVAL_DIFFICULTY, SELFEVAL_PERFORMANCE, STATUS_LABELS, TASK_NAMES } from '../constants';
 import { useApp } from '../store/AppContext';
 import { dateStamp, downloadCSV, downloadJSON, fmtDateTime, trialsToCSV } from '../store/exporter';
@@ -20,7 +20,7 @@ function levelOf(s: SessionRecord): { value: number | null; label: string } {
 
 /** 総合アセスメントの通し結果（種目別サマリーとレベルのめやす） */
 export function AssessmentResultScreen({ assessmentId }: { assessmentId: string }) {
-  const { doc, navigate, updateAssessment } = useApp();
+  const { doc, navigate, updateAssessment, setNavGuard } = useApp();
   const assessment = doc.assessments.find((a) => a.id === assessmentId);
   const sessions = useMemo(
     () =>
@@ -31,6 +31,13 @@ export function AssessmentResultScreen({ assessmentId }: { assessmentId: string 
   );
   const [note, setNote] = useState(assessment?.note ?? '');
   const [noteSaved, setNoteSaved] = useState(false);
+
+  // 所見メモが未保存のまま画面を離れようとしたら確認する
+  const noteDirty = note !== (assessment?.note ?? '');
+  useEffect(() => {
+    setNavGuard(noteDirty ? { message: '所見メモが保存されていません。保存せずに移動しますか？' } : null);
+    return () => setNavGuard(null);
+  }, [noteDirty, setNavGuard]);
 
   if (!assessment) {
     return (

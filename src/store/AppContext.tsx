@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { AppSettings, AssessmentPlan, AssessmentRecord, DataDoc, SessionPlan, SessionRecord, UserRecord } from '../types';
 import { clearInflight, loadDoc, loadInflight, saveDoc } from './storage';
@@ -35,6 +35,11 @@ interface AppContextValue {
   clearAll: () => void;
   recoveredSessionId: string | null;
   dismissRecovered: () => void;
+  /** 保存失敗（容量超過など）が起きたか。バナー表示用 */
+  saveFailed: boolean;
+  dismissSaveFailed: () => void;
+  /** 画面離脱前の確認（未保存メモなど）。null で解除 */
+  setNavGuard: (guard: { message: string } | null) => void;
 }
 
 const Ctx = createContext<AppContextValue | null>(null);
@@ -72,13 +77,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [screen, setScreen] = useState<Screen>({ name: 'top' });
   const [currentUserId, setCurrentUser] = useState<string | null>(null);
   const [recoveredSessionId, setRecovered] = useState<string | null>(() => boot().recovered);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const saveFailedRef = useRef(false);
+  const navGuardRef = useRef<{ message: string } | null>(null);
 
   const mutate = useCallback((fn: (d: DataDoc) => DataDoc) => {
     setDoc((prev) => {
       const next = fn(prev);
-      saveDoc(next);
+      if (!saveDoc(next)) saveFailedRef.current = true;
       return next;
     });
+    // updaterは遅延実行されるため、反映後に失敗フラグを拾ってバナー表示する
+    window.setTimeout(() => {
+      if (saveFailedRef.current) {
+        saveFailedRef.current = false;
+        setSaveFailed(true);
+      }
+    }, 0);
   }, []);
 
   // 文字サイズをドキュメントに反映
@@ -87,9 +102,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [doc.settings.fontScale]);
 
   const navigate = useCallback((s: Screen) => {
+    // 未保存メモなどがある場合は確認してから移動する
+    if (navGuardRef.current && !window.confirm(navGuardRef.current.message)) return;
+    navGuardRef.current = null;
     setScreen(s);
     window.scrollTo(0, 0);
   }, []);
+
+  const setNavGuard = useCallback((guard: { message: string } | null) => {
+    navGuardRef.current = guard;
+  }, []);
+
+  const dismissSaveFailed = useCallback(() => setSaveFailed(false), []);
 
   const addUser = useCallback(
     (rawId: string): string | null => {
@@ -267,8 +291,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       clearAll,
       recoveredSessionId,
       dismissRecovered,
+      saveFailed,
+      dismissSaveFailed,
+      setNavGuard,
     }),
-    [doc, screen, navigate, currentUserId, addUser, updateUser, deleteUser, saveSession, updateSession, deleteSession, saveAssessment, updateAssessment, updateSettings, updateDefaults, importData, clearAll, recoveredSessionId, dismissRecovered]
+    [doc, screen, navigate, currentUserId, addUser, updateUser, deleteUser, saveSession, updateSession, deleteSession, saveAssessment, updateAssessment, updateSettings, updateDefaults, importData, clearAll, recoveredSessionId, dismissRecovered, saveFailed, dismissSaveFailed, setNavGuard]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

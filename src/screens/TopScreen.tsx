@@ -1,24 +1,79 @@
 import { useState } from 'react';
 import { useApp } from '../store/AppContext';
 
+/** 氏名らしき入力（漢字・ひらがな・カタカナを含む）かどうか */
+function looksLikeName(id: string): boolean {
+  return /[一-鿿ぁ-ゖァ-ヺ]/.test(id);
+}
+
+/** 初回起動時の運用注意（1回だけ表示） */
+function FirstRunNotice({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-overlay" role="dialog" aria-label="はじめにお読みください">
+      <div className="modal-card">
+        <h2>はじめに（支援者の方へ）</h2>
+        <ul className="first-run-list">
+          <li>
+            <strong>利用者のIDは記号で。</strong>
+            「A-01」のような記号のIDを使い、氏名は入力しないでください（個人情報を持たない設計を保つため）。
+          </li>
+          <li>
+            <strong>所見メモに個人情報を書かない。</strong>
+            氏名・診断名・家族情報などは記入しない運用でお願いします。
+          </li>
+          <li>
+            <strong>記録は「このPCのこのブラウザ」にだけ保存されます。</strong>
+            ブラウザの閲覧データを削除すると記録も消えます。残したい記録は、管理画面の
+            JSONエクスポートで保存するか、レポートを印刷してください。
+          </li>
+          <li>
+            <strong>結果は参考情報です。</strong>
+            能力や適性を確定するものではなく、支援者の観察と合わせて活用してください。
+          </li>
+        </ul>
+        <div className="panel-actions">
+          <button type="button" className="btn btn-primary btn-lg" onClick={onClose}>
+            わかりました
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TopScreen() {
-  const { doc, navigate, currentUserId, setCurrentUser, addUser, recoveredSessionId, dismissRecovered } = useApp();
+  const { doc, navigate, currentUserId, setCurrentUser, addUser, recoveredSessionId, dismissRecovered, updateSettings } =
+    useApp();
   const [newId, setNewId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [nameWarning, setNameWarning] = useState<string | null>(null);
 
-  const onAdd = () => {
-    const err = addUser(newId);
+  const doAdd = (id: string) => {
+    const err = addUser(id);
     setError(err);
+    setNameWarning(null);
     if (!err) {
-      setCurrentUser(newId.trim());
+      setCurrentUser(id.trim());
       setNewId('');
     }
+  };
+
+  const onAdd = () => {
+    const id = newId.trim();
+    if (id && looksLikeName(id)) {
+      setError(null);
+      setNameWarning(id);
+      return;
+    }
+    doAdd(newId);
   };
 
   const sortedUsers = [...doc.users].sort((a, b) => a.id.localeCompare(b.id, 'ja'));
 
   return (
     <div className="screen">
+      {!doc.settings.onboardingDone && <FirstRunNotice onClose={() => updateSettings({ onboardingDone: true })} />}
+
       {recoveredSessionId && (
         <div className="banner" role="status">
           <span>前回中断されたセッションのデータを保存しました（履歴から確認できます）。</span>
@@ -69,6 +124,22 @@ export function TopScreen() {
           </button>
         </div>
         {error && <div className="form-error" role="alert">{error}</div>}
+        {nameWarning && (
+          <div className="name-warning" role="alertdialog" aria-label="IDの確認">
+            <p>
+              「{nameWarning}」は氏名のように見えます。個人情報保護のため、
+              <strong>「A-01」のような記号のID</strong>をおすすめします。このまま登録しますか？
+            </p>
+            <div className="panel-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setNameWarning(null)}>
+                入力しなおす
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => doAdd(nameWarning)}>
+                このまま登録する
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="panel-actions">
           <button

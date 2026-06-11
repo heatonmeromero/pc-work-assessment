@@ -48,9 +48,28 @@ export function loadDoc(): DataDoc {
   }
 }
 
-export function saveDoc(doc: DataDoc): void {
-  localStorage.setItem(KEY, JSON.stringify(doc));
+/** 保存。容量超過などで失敗したら false（呼び出し側で利用者に知らせる） */
+export function saveDoc(doc: DataDoc): boolean {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(doc));
+    return true;
+  } catch {
+    return false;
+  }
 }
+
+/** 現在の保存データのおおよそのバイト数（localStorageはUTF-16のため文字数×2） */
+export function storageUsageBytes(): number {
+  try {
+    const raw = localStorage.getItem(KEY);
+    return raw ? raw.length * 2 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** localStorageのおおよその上限（ブラウザにより異なるが5MBが一般的） */
+export const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024;
 
 /** 実施中セッションの逐次保存（ブラウザ強制終了からの復元用） */
 export function saveInflight(rec: SessionRecord): void {

@@ -1,7 +1,7 @@
 import type { TaskType } from './types';
 
 export const APP_NAME = 'PCワークアセスメント（仮称）';
-export const APP_VERSION = '0.7.0';
+export const APP_VERSION = '0.8.0';
 
 export const TASK_ORDER: TaskType[] = ['numeric', 'text', 'copypaste', 'searchfix', 'filesort'];
 

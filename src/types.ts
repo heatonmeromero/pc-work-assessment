@@ -101,6 +101,10 @@ export interface UserRecord {
 
 export interface AppSettings {
   fontScale: 's' | 'm' | 'l';
+  /** 管理画面の合言葉（誤操作・いたずら防止が目的。暗号化はしないためセキュリティ機能ではない） */
+  adminPin?: string;
+  /** 初回起動時の運用注意を表示済みか */
+  onboardingDone?: boolean;
   defaults: {
     nUp: number;
     mWindow: number;

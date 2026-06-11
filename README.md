@@ -12,17 +12,27 @@
 
 ## 起動方法
 
-### 配布版（施設のPC）
+### 公開URL（推奨・インストール不要）
+
+**https://heatonmeromero.github.io/pc-work-assessment/**
+
+ブラウザ（Edge / Chrome）で開くだけで使えます。アプリはサーバーと通信せず、
+記録データは**開いたPCのそのブラウザの中**にだけ保存されます（URLを知っている他の人が
+開いても、その人のブラウザに新しい空のデータができるだけで、こちらの記録は見えません）。
+
+### 配布版（オフラインのPC向け）
 1. `dist` フォルダごとUSB等でコピーする
 2. `dist` 内の `start.bat` をダブルクリック（または `index.html` をブラウザで開く）
 
 ビルドは単一HTMLに全アセットを内包しているため、`file://` のまま動作します。Edge / Chrome（Windows 11）で動作確認。
 
-### 開発
+### 開発・公開版の更新
 ```
 npm install
-npm run dev      # 開発サーバー
-npm run build    # dist/ に単一HTMLを出力
+npm run dev        # 開発サーバー
+npm run build      # dist/ に単一HTMLを出力（配布版）
+npm run build:web  # docs/ に出力（公開URL用）
+git add -A && git commit -m "更新内容" && git push   # → 公開URLに自動反映（1〜2分）
 ```
 
 ## データの保存と移動（重要）
